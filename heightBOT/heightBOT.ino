@@ -10,7 +10,9 @@ int lastDistance;
 int totalAngle;
 int horizontalDistance;
 Servo myServo; 
-bool stopMeasuring; 
+bool stopMeasuring;
+int numOver = 0;
+
 #define    LIDARLite_ADDRESS   0x62          // Default I2C Address of LIDAR-Lite.
 #define    RegisterMeasure     0x00          // Register to write to initiate ranging.
 #define    MeasureValue        0x04          // Value to initiate ranging.
@@ -18,7 +20,7 @@ bool stopMeasuring;
   
 void setup(){ 
   myServo.attach(servoPin);
-  servoPosition = 0;
+  servoPosition = 15;
   lastDistance = 0;
   stopMeasuring = false;
   myServo.write(servoPosition);
@@ -28,24 +30,85 @@ void setup(){
   delay(100); // Waits to make sure everything is powered up before sending or receiving data  
   I2c.timeOut(50); // Sets a timeout to ensure no locking up of sketch if I2C communication fails
   Serial.println("END SETUP==============");
-  horizontalDistance = llGetDistanceAverage(9);
+  horizontalDistance = llGetDistanceAverage(20);
 }
 
 void loop(){
+
+  if(stopMeasuring){
+    Serial.println("Distance = ");
+    Serial.println(getHeight(distance));
+    myServo.write(25);
+    delay(50000000);
+  }
+  
+  int saveDist = lastDistance;
   lastDistance = distance;
   distance = llGetDistanceAverage(9);
   Serial.println(distance);
-  if(atMaxDistance()){
+
+  if(overshoot(distance)){
+    lastDistance = saveDist;
+    if(numOver > 1){
+      stopMeasuring = true;
+      distance = lastDistance;
+    }else{
+    totalAngle = totalAngle - 25;
+    moveServoDegrees(-25);
+    Serial.println("Overshoot detected. Remeasuring.");
+    }
+  } 
+  else if(atMaxDistance()){
     totalAngle = totalAngle - 5;
     moveServoDegrees(-5);
     stopMeasuring = true;
+    Serial.println("Max Value Detected");
   }
   else{
     totalAngle = totalAngle + 5;
-    moveServoDegrees(5); 
+    moveServoDegrees(5);
+    delay(250);
   }
 }
 
+bool overshoot(int distance){
+  Serial.println("Checking Overshoot ========");
+  double oldHeight = getHeight(lastDistance);
+  Serial.print("Calculated Height: "); 
+  Serial.println(oldHeight);
+  double expectedHeight = getEstHeight();
+  Serial.print("Estimated Height: "); 
+  Serial.println(expectedHeight);
+  if(distance/expectedHeight > 1.3)
+  {
+    numOver++;
+    return true;
+  }
+  else return false;
+}
+
+double getEstHeight(){
+  Serial.print("Old angle: ");
+  double oldAngle = getEstAngle(lastDistance);
+  Serial.println(oldAngle);
+  Serial.print("New angle: ");
+  double nextAngle = oldAngle + getActualDegree(5);
+  Serial.println(nextAngle);
+  return horizontalDistance / cos((nextAngle/ 180)* PI);
+}
+
+double getEstAngle(int a){
+  double angle = acos((double)horizontalDistance/(double)a)/ PI * 180;
+  return angle;
+}
+
+double getHeight(int distance){
+  return sqrt((distance * distance) - (horizontalDistance * horizontalDistance));
+}
+
+double getActualDegree(int degree){
+  return 55*((double)degree)/145;
+}
 
 int llGetDistanceAverage(int numberOfReadings){ 
   if(numberOfReadings < 2){
@@ -60,15 +123,9 @@ int llGetDistanceAverage(int numberOfReadings){
 }
 
 void moveServoDegrees(int n){
-  if(!stopMeasuring){
   servoPosition = servoPosition + n;
   myServo.write(servoPosition);
   delay(300);
-  }else{
-    Serial.println("Distance = ");
-    Serial.println(getHeight(distance));
-    delay(5000);
-  }
 }
 
 bool atMaxDistance(){
@@ -129,17 +186,4 @@ int GetDistance(){
   return distance;
 }
 
-double getDistanceChange(int first, int second){
-  //Serial.println("Actual change=======" + String((first * first) + (second * second) - (2 * first* second * cos( (PI * 5) / 180))) );
- return sqrt((first * first) + (second * second) - (2 * first* second * cos( (PI * 5) / 180)));
-} 
-
-double getExpectedDistanceChange(int lastDistance){
- //Serial.println("Expected Change=======" + String((horizontalDistance / cos((totalAngle * PI) / 180)) - sqrt((horizontalDistance * horizontalDistance) + (lastDistance * lastDistance)) ));
-  return  (horizontalDistance / cos((totalAngle * PI) / 180)) - sqrt((horizontalDistance * horizontalDistance) + (lastDistance * lastDistance));
-}
-
-double getHeight(int distance){
-  return sqrt((distance * distance) - (horizontalDistance * horizontalDistance));
-}
 
