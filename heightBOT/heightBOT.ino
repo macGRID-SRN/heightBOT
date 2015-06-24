@@ -1,3 +1,21 @@
+#include "SPI.h"
+#include "Adafruit_GFX.h"
+#include "Adafruit_ILI9340.h"
+
+#if defined(__SAM3X8E__)
+    #undef __FlashStringHelper::F(string_literal)
+    #define F(string_literal) string_literal
+#endif
+
+// These are the pins used for the UNO
+// for Due/Mega/Leonardo use the hardware SPI pins (which are different)
+#define _sclk 13
+#define _miso 12
+#define _mosi 11
+#define _cs 10
+#define _dc 9
+#define _rst 8
+
 #include "Servo.h"
 #define servoPin 3
 #include <I2C.h>
@@ -17,8 +35,20 @@ int numOver = 0;
 #define    RegisterMeasure     0x00          // Register to write to initiate ranging.
 #define    MeasureValue        0x04          // Value to initiate ranging.
 #define    RegisterHighLowB    0x8f    
-  
+
+Adafruit_ILI9340 tft = Adafruit_ILI9340(_cs, _dc, _rst);
+
+int dispX = 320;
+int dispY = 240;
+
+int lastY = 1; //The next Y to print at on the TFT
+
 void setup(){ 
+  tft.begin();
+  tft.setRotation(1);
+  tft.fillScreen(ILI9340_BLACK);
+  tft.setTextColor(ILI9340_RED);  tft.setTextSize(2);
+  
   myServo.attach(servoPin);
   servoPosition = 15;
   lastDistance = 0;
@@ -30,6 +60,10 @@ void setup(){
   delay(100); // Waits to make sure everything is powered up before sending or receiving data  
   I2c.timeOut(50); // Sets a timeout to ensure no locking up of sketch if I2C communication fails
   Serial.println("END SETUP==============");
+  
+  tft.setCursor(1,lastY);
+  tft.println("END SETUP======");
+  
   horizontalDistance = llGetDistanceAverage(20);
 }
 
@@ -38,7 +72,15 @@ void loop(){
   if(stopMeasuring){
     Serial.println("Distance = ");
     Serial.println(getHeight(distance));
+    
+    tftPrintLn(1, "Distance = ");
+    tftPrint(130, (String) getHeight(distance));
+    
+    tftPrintLn(1, "END MEASURE======");
+    tftPrintLn(1, "=========================");
+        
     myServo.write(25);
+    
     delay(50000000);
   }
   
@@ -56,6 +98,9 @@ void loop(){
     totalAngle = totalAngle - 25;
     moveServoDegrees(-25);
     Serial.println("Overshoot detected. Remeasuring.");
+    
+    tftPrintLn(1, "Overshoot detected. Retry.");
+    
     }
   } 
   else if(atMaxDistance()){
@@ -63,6 +108,8 @@ void loop(){
     moveServoDegrees(-5);
     stopMeasuring = true;
     Serial.println("Max Value Detected");
+    
+    tftPrintLn(1, "Max Value Detected");
   }
   else{
     totalAngle = totalAngle + 5;
@@ -79,6 +126,14 @@ bool overshoot(int distance){
   double expectedHeight = getEstHeight();
   Serial.print("Estimated Height: "); 
   Serial.println(expectedHeight);
+  
+  tftPrintLn(1, "=========================");
+  tftPrintLn(1, "Checking Overshoot ======");
+  tftPrintLn(1, "Calc Height: ");
+  tftPrint(150, (String) oldHeight);
+  tftPrintLn(1, "Est. Height: ");
+  tftPrint(150, (String) expectedHeight); 
+  
   if(distance/expectedHeight > 1.3)
   {
     numOver++;
@@ -94,6 +149,12 @@ double getEstHeight(){
   Serial.print("New angle: ");
   double nextAngle = oldAngle + getActualDegree(5);
   Serial.println(nextAngle);
+  
+  tftPrintLn(1, "Old A: ");
+  tftPrint(80, (String) oldAngle);
+  tftPrint(150, "New A: ");
+  tftPrint(230, (String) nextAngle); 
+  
   return horizontalDistance / cos((nextAngle/ 180)* PI);
 }
 
@@ -186,4 +247,26 @@ int GetDistance(){
   return distance;
 }
 
+//Try to print to the TFT, after we get past or to max Y we will refresh the screen
+void tftPrintLn(int X, String str) {
+  lastY += 16;
+  
+  if (lastY >= dispY) {
+    lastY = 1;
+    //tft.fillScreen(ILI9340_BLACK);  
+    //tft.setTextColor(ILI9340_RED);  tft.setTextSize(2);
+    delay(500); //Wait a tiny bit for the values to be read
+    
+  }
+  
+  tft.fillRect(1, lastY, dispX, 32, ILI9340_BLACK);
+  
+  tft.setCursor(X,lastY);
+  tft.println(str);
+}
 
+//Try to print to the TFT at the current lastY value
+void tftPrint(int X, String str) {
+  tft.setCursor(X,lastY);
+  tft.println(str);
+}
