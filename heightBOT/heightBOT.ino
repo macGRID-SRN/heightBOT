@@ -23,10 +23,10 @@
 
 // Global Variables
 int servoPosition;
-int distance;
-int lastDistance;
+double distance;
+double lastDistance;
 int totalAngle;
-int horizontalDistance;
+double horizontalDistance;
 Servo myServo; 
 bool stopMeasuring;
 int numOver = 0;
@@ -64,7 +64,7 @@ void setup(){
   tft.setCursor(1,lastY);
   tft.println("END SETUP======");
   
-  horizontalDistance = llGetDistanceAverage(20);
+  horizontalDistance = llGetDistanceAverage(20) / 100.0;
 }
 
 void loop(){
@@ -163,7 +163,7 @@ double getEstAngle(int a){
   return angle;
 }
 
-double getHeight(int distance){
+double getHeight(double distance){
   return sqrt((distance * distance) - (horizontalDistance * horizontalDistance));
 }
 
@@ -171,11 +171,11 @@ double getActualDegree(int degree){
   return 55*((double)degree)/145;
 }
 
-int llGetDistanceAverage(int numberOfReadings){ 
+double llGetDistanceAverage(int numberOfReadings){ 
   if(numberOfReadings < 2){
     numberOfReadings = 2; // If the number of readings to be taken is less than 2, default to 2 readings
   }
-  int sum = 0; // Variable to store sum
+  double sum = 0; // Variable to store sum
   for(int i = 0; i < numberOfReadings; i++){ 
       sum = sum + llGetDistance(); // Add up all of the readings
   }
@@ -218,15 +218,15 @@ byte llReadAndWait(char myAddress, int numOfBytes, byte arrayToSave[2]){
 Get 2-byte distance from sensor and combine into single 16-bit int
 =============================================================================================================================================*/
 
-int llGetDistance(){
+double llGetDistance(){
   llWriteAndWait(0x00,0x04); // Write 0x04 to register 0x00 to start getting distance readings
   byte myArray[2]; // array to store bytes from read function
   llReadAndWait(0x8f,2,myArray); // Read 2 bytes from 0x8f
   int distance = (myArray[0] << 8) + myArray[1];  // Shift high byte [0] 8 to the left and add low byte [1] to create 16-bit int
-  return(distance);
+  return((double)distance);
 }
 
-int GetDistance(){
+double GetDistance(){
     uint8_t nackack = 100; // Setup variable to hold ACK/NACK resopnses     
   while (nackack != 0){ // While NACK keep going (i.e. continue polling until sucess message (ACK) is received )
     nackack = I2c.write(LIDARLite_ADDRESS,RegisterMeasure, MeasureValue); // Write 0x04 to 0x00
@@ -244,7 +244,7 @@ int GetDistance(){
   int distance = (distanceArray[0] << 8) + distanceArray[1];  // Shift high byte [0] 8 to the left and add low byte [1] to create 16-bit int
   
   // Print Distance
-  return distance;
+  return (double)distance;
 }
 
 //Try to print to the TFT, after we get past or to max Y we will refresh the screen
